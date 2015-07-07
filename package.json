@@ -1,7 +1,7 @@
 {
   "name": "genome",
-  "version": "0.0.1",
-  "description": "Generator-based task runner",
+  "version": "0.0.9",
+  "description": "Simple build system using ES6 classes, generators, and promises",
   "main": "./index.js",
   "bin": {
     "genome": "./bin/genome.js"

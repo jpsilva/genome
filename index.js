@@ -13,11 +13,15 @@ var cp = require('fs-cp'),
  * genome constructor
  * Takes in task object
  * Runs all tasks from command line
- * @param  {[string]} tasks All available tasks
+ * @param  {object} tasks           All available tasks
+ * @param  {boolean} extendString   If true, adds methods and properties to strings. Default = true
  * @return {Promise} Resolves when all tasks are complete
  */
-module.exports = genome = function(tasks) {
-  prototypeString();
+module.exports = genome = function(tasks, extendString = true) {
+  if (extendString) {
+    prototypeString();
+  }
+
   genome.tasks = tasks;
   return genome.do(process.argv.slice(2));
 }
@@ -52,25 +56,40 @@ Q.onerror = function(err) {
   console.error(err);
 };
 
+/**
+ * Adds string methods and properties
+ */
 function prototypeString() {
-  // String prototyping
+  /**
+   * Watch file(s)
+   * @param  {fn, string, [string]} task   Function or task to call when files change
+   */
   String.prototype.onChange = function(task) {
     var filename = this;
     console.log(`Watching ${filename}...`);
 
     gaze(filename, function(err, watcher) {
-      this.on('all', function(event, filepath) {
-        console.log(`${filepath} ${event}`);
-        genome.do(task);
+      if (err) {
+        return console.error(err);
+      }
+
+      this.on('all', function(event, whichFile) {
+        console.log(`${whichFile} was ${event}`);
+
+        if (typeof task === 'function') {
+          task(whichFile);
+        } else {
+          genome.do(task);
+        }
       });
     });
   };
 
   /**
-   * [use description]
-   * @param  {string} filter [description]
-   * @param  {string} ext    [description]
-   * @return {Promise}       [description]
+   * Process glob string, passing file contents into filter
+   * @param  {fn} filter    File contents get passed into this
+   * @param  {string} ext   Optional, change the extension of the file for output
+   * @return {Promise}
    */
   String.prototype.use = function(filter, ext) {
     var globPath = this;
@@ -144,12 +163,6 @@ function prototypeString() {
           });
         }
       });
-    }
-  });
-
-  Object.defineProperty(String.prototype, 'filenames', {
-    get: function () {
-      return glob(this);
     }
   });
 }
