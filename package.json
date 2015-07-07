@@ -1,6 +1,6 @@
 {
   "name": "genome",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "Simple build system using ES6 generators and promises",
   "main": "./index.js",
   "bin": {

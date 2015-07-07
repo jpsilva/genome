@@ -152,7 +152,10 @@ function prototypeString() {
     set: function(data) {
       var dest = this;
 
-      if (data.splice) {
+      if (data.readable) {
+        // If stream
+        return cp(data, dest);
+      } else if (data.splice) {
         // If array of files
         let promises = data.map(function(file) {
           return path.normalize(`${dest}/${file.path.name}${file.path.ext}`).contents = file.data;
@@ -160,24 +163,17 @@ function prototypeString() {
 
         return Q.all(promises);
       } else {
+        // If string
         return new Promise(function(resolve, reject) {
-          if (data.readable) {
-            // If stream
-            cp(data, dest).then(function() {
-              resolve();
-            });
-          } else {
-            // If string
-            mkdirp.sync(path.dirname(dest));
-            fs.writeFile(dest, data, 'utf8', function(err) {
-              if (err) {
-                reject(err);
-                console.log('err ' , err);
-              } else {
-                resolve(data);
-              }
-            });
-          }
+          mkdirp.sync(path.dirname(dest));
+          fs.writeFile(dest, data, 'utf8', function(err) {
+            if (err) {
+              reject(err);
+              console.log('err ' , err);
+            } else {
+              resolve(data);
+            }
+          });
         });
       }
     }

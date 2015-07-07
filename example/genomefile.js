@@ -46,12 +46,12 @@ module.exports = class {
 
   *scripts () {
     // Output stream to file
-    yield paths.scripts.dest.contents = browserify(paths.scripts.src, { transform: 'babelify' }).bundle();
+    return paths.scripts.dest.contents = browserify(paths.scripts.src, { transform: 'babelify' }).bundle();
   }
 
   *styles () {
     // Output multiple files to directory
-    paths.styles.dest.contents = yield paths.styles.src.use(stylus.render, '.css');
+    return paths.styles.dest.contents = yield paths.styles.src.use(stylus.render, '.css');
   }
 
   *watch () {
@@ -64,19 +64,15 @@ module.exports = class {
     'app/styles/**/*.styl'.onChange('styles');
 
     // Set timeout to avoid server reloading all files at beginning
-    // setTimeout(function() {
-      'dist/**/*'.onChange(browserSync.reload);
-    // }, 1000);
+    yield genome.wait(1000);
+    'dist/**/*'.onChange(browserSync.reload);
   }
 
   *build () {
     // Run tasks in serial with yield statement
     yield genome.do('clean');
-    yield genome.do('html');
-    yield genome.do('robots');
-    yield genome.do('styles');
-    yield genome.do('scripts');
-    // yield genome.do(['html', 'robots', 'styles', 'scripts']);
+    yield genome.do(['html', 'robots']);
+    yield genome.do(['scripts', 'styles']);
   }
 
   *serve () {
@@ -89,18 +85,18 @@ module.exports = class {
   }
 
   *medium () {
-    yield genome.wait(2000);
+    yield genome.wait(1000);
+    yield genome.wait(1000);
     console.log('2nd');
   }
 
   *long () {
-    yield genome.wait(3000);
-    console.log('1st');
+    console.log(yield genome.wait(2500, '1st'));
   }
 
   *async() {
-    yield genome.do('long');
-    yield genome.do('medium');
+    yield genome.do(['long']);
+    yield genome.do(['medium']);
     genome.do('short');
   }
 };
