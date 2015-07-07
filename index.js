@@ -17,8 +17,8 @@ var cp = require('fs-cp'),
  * @param  {boolean} extendString   If true, adds methods and properties to strings. Default = true
  * @return {Promise} Resolves when all tasks are complete
  */
-module.exports = genome = function(tasks, extendString = true) {
-  if (extendString) {
+module.exports = genome = function(tasks, extendString) {
+  if (extendString === undefined || extendString) {
     prototypeString();
   }
 
@@ -50,6 +50,20 @@ genome.do = function(tasks) {
 
   return Q.all(promises);
 };
+
+/**
+ * Promise wrapper for setTimout
+ * @param  {int} time         Passes to setTimeout()
+ * @param  {anything} params  Passes to resolve()
+ * @return {promise}
+ */
+genome.wait = function(time, params) {
+  return new Promise(function(resolve) {
+    setTimeout(function() {
+      resolve(params);
+    }, time);
+  });
+}
 
 // Error handler
 Q.onerror = function(err) {
@@ -96,11 +110,10 @@ function prototypeString() {
 
     return new Promise(function(resolve) {
       var filenames = glob.sync(globPath),
-          files = [],
-          promises = [];
+          files = [];
 
-      filenames.forEach(function(filename) {
-        promises.push(Q.async(function* () {
+      var promises = filenames.map(function(filename) {
+        return Q.async(function* () {
           var parsedPath = path.parse(filename);
 
           if (ext) {
@@ -112,7 +125,7 @@ function prototypeString() {
             path: parsedPath,
             data: filter(yield filename.contents)
           });
-        })());
+        })();
       });
 
       Q.all(promises)
@@ -139,30 +152,34 @@ function prototypeString() {
     set: function(data) {
       var dest = this;
 
-      return new Promise(function(resolve, reject) {
-        if (data.readable) {
-          // If stream
-          cp(data, dest).then(function() {
-            resolve();
-          });
-        } else if (data.splice) {
-          // If array
-          data.forEach(function(file) {
-            path.normalize(`${dest}/${file.path.name}${file.path.ext}`).contents = file.data;
-          });
-        } else {
-          // If string
-          mkdirp.sync(path.dirname(dest));
-          fs.writeFile(dest, data, 'utf8', function(err) {
-            if (err) {
-              reject(err);
-              console.log('err ' , err);
-            } else {
-              resolve(data);
-            }
-          });
-        }
-      });
+      if (data.splice) {
+        // If array of files
+        let promises = data.map(function(file) {
+          return path.normalize(`${dest}/${file.path.name}${file.path.ext}`).contents = file.data;
+        });
+
+        return Q.all(promises);
+      } else {
+        return new Promise(function(resolve, reject) {
+          if (data.readable) {
+            // If stream
+            cp(data, dest).then(function() {
+              resolve();
+            });
+          } else {
+            // If string
+            mkdirp.sync(path.dirname(dest));
+            fs.writeFile(dest, data, 'utf8', function(err) {
+              if (err) {
+                reject(err);
+                console.log('err ' , err);
+              } else {
+                resolve(data);
+              }
+            });
+          }
+        });
+      }
     }
   });
 }

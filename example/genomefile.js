@@ -51,12 +51,12 @@ module.exports = class {
 
   *styles () {
     // Output multiple files to directory
-    yield paths.styles.dest.contents = yield paths.styles.src.use(stylus.render, '.css');
+    paths.styles.dest.contents = yield paths.styles.src.use(stylus.render, '.css');
   }
 
   *watch () {
     yield genome.do('build');
-    genome.do('serve');
+    // genome.do('serve');
 
     // Watch files for changes with .onChange
     'app/**/*.slm'.onChange('html');
@@ -64,18 +64,43 @@ module.exports = class {
     'app/styles/**/*.styl'.onChange('styles');
 
     // Set timeout to avoid server reloading all files at beginning
-    setTimeout(function() {
+    // setTimeout(function() {
       'dist/**/*'.onChange(browserSync.reload);
-    }, 1000);
+    // }, 1000);
   }
 
   *build () {
     // Run tasks in serial with yield statement
     yield genome.do('clean');
-    yield genome.do(['html', 'robots', 'styles', 'scripts']);
+    yield genome.do('html');
+    yield genome.do('robots');
+    yield genome.do('styles');
+    yield genome.do('scripts');
+    // yield genome.do(['html', 'robots', 'styles', 'scripts']);
   }
 
   *serve () {
     browserSync.init({server: paths.server.root});
+  }
+
+  *short () {
+    yield genome.wait(1000);
+    console.log('3rd');
+  }
+
+  *medium () {
+    yield genome.wait(2000);
+    console.log('2nd');
+  }
+
+  *long () {
+    yield genome.wait(3000);
+    console.log('1st');
+  }
+
+  *async() {
+    yield genome.do('long');
+    yield genome.do('medium');
+    genome.do('short');
   }
 };
