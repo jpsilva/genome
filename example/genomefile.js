@@ -36,22 +36,23 @@ module.exports = class {
 
   *robots () {
     // Copy one file to another
-    yield paths.robots.dest.contents = yield paths.robots.src.contents;
+    paths.robots.dest.contents = yield paths.robots.src.contents;
   }
 
   *html () {
     // Process one file and output it
-    yield paths.html.dest.contents = slm.render(yield paths.html.src.contents);
+    paths.html.dest.contents = slm.render(yield paths.html.src.contents);
   }
 
   *scripts () {
     // Output stream to file
-    return paths.scripts.dest.contents = browserify(paths.scripts.src, { transform: 'babelify' }).bundle();
+    return paths.scripts.dest.write(browserify(paths.scripts.src, { transform: 'babelify' }).bundle());
   }
 
   *styles () {
     // Output multiple files to directory
-    return paths.styles.dest.contents = yield paths.styles.src.use(stylus.render, '.css');
+    // yield paths.styles.dest.contents = yield paths.styles.src.use(stylus.render, '.css');
+    return paths.styles.dest.write(yield paths.styles.src.use(stylus.render, '.css'));
   }
 
   *watch () {
@@ -62,17 +63,13 @@ module.exports = class {
     'app/**/*.slm'.onChange('html');
     'app/scripts/**/*.js'.onChange('scripts');
     'app/styles/**/*.styl'.onChange('styles');
-
-    // Set timeout to avoid server reloading all files at beginning
-    yield genome.wait(1000);
     'dist/**/*'.onChange(browserSync.reload);
   }
 
   *build () {
     // Run tasks in serial with yield statement
     yield genome.do('clean');
-    yield genome.do(['html', 'robots']);
-    yield genome.do(['scripts', 'styles']);
+    yield genome.do(['html', 'robots', 'scripts', 'styles']);
   }
 
   *serve () {
@@ -85,6 +82,7 @@ module.exports = class {
   }
 
   *medium () {
+    yield genome.wait(1000);
     yield genome.wait(1000);
     yield genome.wait(1000);
     console.log('2nd');

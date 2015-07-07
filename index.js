@@ -6,7 +6,6 @@ var cp = require('fs-cp'),
     glob = require('glob'),
     mkdirp = require('mkdirp'),
     path = require('path'),
-    Q = require('q'),
     genome;
 
 /**
@@ -41,14 +40,17 @@ genome.do = function(tasks) {
 
   tasks.forEach(function(task, index, array) {
     if (genome.tasks[task]) {
-      console.log(`Doing ${task}`);
-      promises.push(Q.async(genome.tasks[task])());
+      console.log(`Doing ${task}...`);
+
+      promises.push(spawn(genome.tasks[task]));
     } else {
       console.warn(`'${task}' is not a valid task`);
     }
   });
 
-  return Q.all(promises);
+  return Promise.all(promises).then(function() {
+      console.log('Done ', tasks.join(', '));
+    });
 };
 
 /**
@@ -65,10 +67,30 @@ genome.wait = function(time, params) {
   });
 }
 
-// Error handler
-Q.onerror = function(err) {
-  console.error(err);
-};
+/**
+ * Run generator as async function
+ * @param  {fn} generatorFunc
+ * @return {Promise}
+ */
+function spawn(generatorFunc) {
+  function continuer(verb, arg) {
+    var result;
+    try {
+      result = generator[verb](arg);
+    } catch (err) {
+      return Promise.reject(err);
+    }
+    if (result.done) {
+      return result.value;
+    } else {
+      return Promise.resolve(result.value).then(onFulfilled, onRejected);
+    }
+  }
+  var generator = generatorFunc();
+  var onFulfilled = continuer.bind(continuer, "next");
+  var onRejected = continuer.bind(continuer, "throw");
+  return onFulfilled();
+}
 
 /**
  * Adds string methods and properties
@@ -113,7 +135,7 @@ function prototypeString() {
           files = [];
 
       var promises = filenames.map(function(filename) {
-        return Q.async(function* () {
+        return filename.contents.then(function(contents) {
           var parsedPath = path.parse(filename);
 
           if (ext) {
@@ -123,59 +145,68 @@ function prototypeString() {
           files.push({
             filename: filename,
             path: parsedPath,
-            data: filter(yield filename.contents)
+            data: filter(contents)
           });
-        })();
+        });
       });
 
-      Q.all(promises)
+      Promise
+        .all(promises)
         .then(function() {
           resolve(files);
         });
     });
   };
 
-  Object.defineProperty(String.prototype, 'contents', {
-    get: function () {
-      var filename = this;
+  String.prototype.read = function() {
+    var filename = this;
 
+    return new Promise(function(resolve, reject) {
+      fs.readFile(filename, 'utf8', function(err, data) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(data);
+        }
+      });
+    });
+  };
+
+  String.prototype.write = function(data) {
+    var dest = this;
+
+    if (data.readable) {
+      // If stream
+      return cp(data, dest);
+    } else if (data.splice) {
+      // If array of files
+      let promises = data.map(function(file) {
+        return path.normalize(`${dest}/${file.path.name}${file.path.ext}`).write(file.data);
+      });
+
+      return Promise.all(promises);
+    } else {
+      // If string
       return new Promise(function(resolve, reject) {
-        fs.readFile(filename, 'utf8', function(err, data) {
+        mkdirp.sync(path.dirname(dest));
+        fs.writeFile(dest, data, 'utf8', function(err) {
           if (err) {
             reject(err);
+            console.log('err ' , err);
           } else {
             resolve(data);
           }
         });
       });
+    }
+  };
+
+  Object.defineProperty(String.prototype, 'contents', {
+    get: function () {
+      return this.read();
     },
     set: function(data) {
-      var dest = this;
-
-      if (data.readable) {
-        // If stream
-        return cp(data, dest);
-      } else if (data.splice) {
-        // If array of files
-        let promises = data.map(function(file) {
-          return path.normalize(`${dest}/${file.path.name}${file.path.ext}`).contents = file.data;
-        });
-
-        return Q.all(promises);
-      } else {
-        // If string
-        return new Promise(function(resolve, reject) {
-          mkdirp.sync(path.dirname(dest));
-          fs.writeFile(dest, data, 'utf8', function(err) {
-            if (err) {
-              reject(err);
-              console.log('err ' , err);
-            } else {
-              resolve(data);
-            }
-          });
-        });
-      }
+      this.write(data);
     }
   });
 }
