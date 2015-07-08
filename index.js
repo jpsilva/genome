@@ -5,66 +5,81 @@ var cp = require('fs-cp'),
     gaze = require('gaze'),
     glob = require('glob'),
     mkdirp = require('mkdirp'),
-    path = require('path'),
-    genome;
+    path = require('path');
 
-/**
- * genome constructor
- * Takes in task object
- * Runs all tasks from command line
- * @param  {object} tasks           All available tasks
- * @param  {boolean} extendString   If true, adds methods and properties to strings. Default = true
- * @return {Promise} Resolves when all tasks are complete
- */
-module.exports = genome = function(tasks, extendString) {
-  if (extendString === undefined || extendString) {
-    prototypeString();
+class Genome {
+  /**
+   * Genome constructor
+   */
+  constructor () {
+    prototypeString(this);
   }
 
-  genome.tasks = tasks;
-  return genome.do(process.argv.slice(2));
-}
-
-/**
- * genome task runner
- * @param  {string | [string]} tasks Tasks to perform
- * @return {Promise} Resolves when all tasks are complete
- */
-genome.do = function(tasks) {
-  var promises = [];
-
-  // Accept a string or an array
-  if (typeof tasks === 'string') {
-    tasks = [tasks];
+  /**
+   * Spawns tasks passed in through command line
+   * @return {Promise}
+   */
+  run () {
+    return this.spawn(process.argv.slice(2));
   }
 
-  tasks.forEach(function(task, index, array) {
-    if (genome.tasks[task]) {
-      console.log(`Doing ${task}...`);
+  /**
+   * genome task runner
+   * @param  {string | [string]} tasks Tasks to perform
+   * @return {Promise} Resolves when all tasks are complete
+   */
+  spawn (tasks) {
+    var promises = [],
+        all;
 
-      promises.push(spawn(genome.tasks[task]));
-    } else {
-      console.warn(`'${task}' is not a valid task`);
+    // Accept a string or an array
+    if (typeof tasks === 'string') {
+      tasks = [tasks];
     }
-  });
 
-  return Promise.all(promises).then(function() {
+    tasks.forEach(function(task, index, array) {
+      if (this._tasks[task]) {
+        console.log(`Doing ${task}...`);
+
+        promises.push(runGenerator(this._tasks[task]));
+      } else {
+        console.warn(`'${task}' is not a valid task`);
+      }
+    }.bind(this));
+
+    return Promise.all(promises).then(function() {
       console.log('Done ', tasks.join(', '));
     });
-};
 
-/**
- * Promise wrapper for setTimout
- * @param  {int} time         Passes to setTimeout()
- * @param  {anything} params  Passes to resolve()
- * @return {promise}
- */
-genome.wait = function(time, params) {
-  return new Promise(function(resolve) {
-    setTimeout(function() {
-      resolve(params);
-    }, time);
-  });
+    return all;
+  }
+
+  /**
+   * Promise wrapper for setTimout
+   * Useful for testing, but should not be necessary in production
+   * @param  {int} time         Passes to setTimeout()
+   * @param  {anything} params  Passes to resolve()
+   * @return {promise}
+   */
+  wait (time, params) {
+    return new Promise(function(resolve) {
+      setTimeout(function() {
+        resolve(params);
+      }, time);
+    });
+  }
+
+  get tasks() {
+    return this._tasks;
+  }
+
+  set tasks(tasks) {
+    this._tasks = tasks;
+
+    for (let taskName in tasks) {
+      this[taskName] = this[taskName] || this.spawn.bind(this, taskName);
+    }
+  }
 }
 
 /**
@@ -72,7 +87,7 @@ genome.wait = function(time, params) {
  * @param  {fn} generatorFunc
  * @return {Promise}
  */
-function spawn(generatorFunc) {
+function runGenerator(generatorFunc) {
   function continuer(verb, arg) {
     var result;
     try {
@@ -95,7 +110,7 @@ function spawn(generatorFunc) {
 /**
  * Adds string methods and properties
  */
-function prototypeString() {
+function prototypeString(genome) {
   /**
    * Watch file(s)
    * @param  {fn, string, [string]} task   Function or task to call when files change
@@ -115,7 +130,7 @@ function prototypeString() {
         if (typeof task === 'function') {
           task(whichFile);
         } else {
-          genome.do(task);
+          genome.spawn(task);
         }
       });
     });
@@ -210,3 +225,5 @@ function prototypeString() {
     }
   });
 }
+
+module.exports = new Genome();

@@ -1,4 +1,4 @@
-'use strict'; // Required to use classes
+'use strict';
 
 var browserify = require('browserify'),
     browserSync = require('browser-sync').create(),
@@ -28,73 +28,75 @@ var browserify = require('browserify'),
       }
     };
 
-module.exports = class {
-  *clean () {
+genome.tasks = {
+  * clean() {
     // Use plain JS
     del.sync(paths.server.root);
-  }
+  },
 
-  *robots () {
+  * robots() {
     // Copy one file to another
-    paths.robots.dest.contents = yield paths.robots.src.contents;
-  }
+    return paths.robots.dest.write(yield paths.robots.src.contents);
+  },
 
-  *html () {
+  * html() {
     // Process one file and output it
-    paths.html.dest.contents = slm.render(yield paths.html.src.contents);
-  }
+    return paths.html.dest.write(slm.render(yield paths.html.src.contents));
+  },
 
-  *scripts () {
+  * scripts() {
     // Output stream to file
     return paths.scripts.dest.write(browserify(paths.scripts.src, { transform: 'babelify' }).bundle());
-  }
+  },
 
-  *styles () {
+  * styles() {
     // Output multiple files to directory
-    // yield paths.styles.dest.contents = yield paths.styles.src.use(stylus.render, '.css');
     return paths.styles.dest.write(yield paths.styles.src.use(stylus.render, '.css'));
-  }
+  },
 
-  *watch () {
-    yield genome.do('build');
-    // genome.do('serve');
+  * watch() {
+    yield genome.build();
+    genome.serve();
 
     // Watch files for changes with .onChange
     'app/**/*.slm'.onChange('html');
     'app/scripts/**/*.js'.onChange('scripts');
     'app/styles/**/*.styl'.onChange('styles');
     'dist/**/*'.onChange(browserSync.reload);
-  }
+  },
 
-  *build () {
+  * build() {
     // Run tasks in serial with yield statement
-    yield genome.do('clean');
-    yield genome.do(['html', 'robots', 'scripts', 'styles']);
-  }
+    yield genome.clean();
+    return genome.spawn(['html', 'robots', 'scripts', 'styles']);
+  },
 
-  *serve () {
+  * serve() {
     browserSync.init({server: paths.server.root});
-  }
+  },
 
-  *short () {
+  // For testing synchronicity
+  * short() {
     yield genome.wait(1000);
     console.log('3rd');
-  }
+  },
 
-  *medium () {
+  * medium() {
     yield genome.wait(1000);
     yield genome.wait(1000);
     yield genome.wait(1000);
     console.log('2nd');
-  }
+  },
 
-  *long () {
+  * long() {
     console.log(yield genome.wait(2500, '1st'));
-  }
+  },
 
-  *async() {
-    yield genome.do(['long']);
-    yield genome.do(['medium']);
-    genome.do('short');
+  * async() {
+    yield genome.spawn(['long']);
+    yield genome.spawn(['medium']);
+    genome.spawn('short');
   }
 };
+
+genome.run();
