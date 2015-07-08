@@ -14,28 +14,29 @@ npm i -save-dev genome
 Create a `genomefile.js` in your project's root directory.
 
 ```javascript
-'use strict'; // Required to use classes
-
 var genome = require('genome');
 
-module.exports = class {
+genome.tasks = {
   // Tasks go here
-}
+};
+
+// Run tasks passed in from command line
+genome.run();
 ```
 
 ### Create tasks
 Tasks in genome are generator functions. Task names may include colons (:) and/or hyphens (-).
 
 ```javascript
-*sayhi () {
+* sayhi() {
   console.log('Hello, world');
-}
+},
 
-*'say-something-else' () {
+* 'say-something-else'() {
   console.log('Something else');
-}
+},
 
-*'say:goodbye' () {
+* 'say:goodbye'() {
   console.log('See ya later');
 }
 ```
@@ -53,73 +54,83 @@ genome commands may accept multiple tasks to run asyncronously:
 genome sayhi say-something-else say:goodbye
 ```
 
-Run a task from within another task using `genome.do()`.
+Run a task from within another task using `genome.spawn()`.
 
 ```javascript
-*speak () {
-  genome.do('sayhi');
+* speak() {
+  genome.spawn('sayhi');
+
+  // Or use genome's shorthand methods:
+  genome.sayhi();
 }
 ```
 
-`genome.do()` accepts strings and arrays. Arrays of tasks will be run asyncronously.
+`genome.spawn()` accepts strings and arrays. Arrays of tasks will be run asyncronously.
 
 ```javascript
-*speak1 () {
-  genome.do(['sayhi', 'say-something-else', 'say:goodbye']);
-}
+* speak1() {
+  genome.spawn(['sayhi', 'say-something-else', 'say:goodbye']);
+},
 
 // Is the same as:
 
-*speak2 () {
-  genome.do('sayhi');
-  genome.do('say-something-else');
-  genome.do('say:goodbye');
+* speak2() {
+  genome.spawn('sayhi');
+  genome.spawn('say-something-else');
+  genome.spawn('say:goodbye');
 }
 ```
 
-If you need tasks to run in a certain order, add the yield statement before calling `genome.do()`.
+If you need tasks to run in a certain order, add the yield statement before calling `genome.spawn()`.
 
 ```javascript
-*speak2 () {
-  yield genome.do('sayhi');
-  yield genome.do('say-something-else');
-  genome.do('say:goodbye');
+* speak2() {
+  yield genome.spawn('sayhi');
+  yield genome.spawn('say-something-else');
+  genome.spawn('say:goodbye');
 }
 ```
 
 ### Read/write files
-Genomen adds a `.contents` property to strings to make reading and writing files as easy as:
+Genome adds `read()` and `write()` methods to strings to make reading and writing files as easy as:
+
+```javascript
+return 'dist/html.index'.write(yield 'app/html.index'.read());
+```
+
+Genome also adds a `.contents` property as a read/write shorthand, so the same code can be written as:
 
 ```javascript
 'dist/html.index'.contents = yield 'app/html.index'.contents;
 ```
 
+Not that `read()`, `write()` and the `.contents` *getter* all return promises, but the `.contents` *setter*
+does not return anything. So if you need the file to be written *before* something else happens, use `write()`.
+
+### Processing files
 Genome does not require plugins like gulp or grunt. Simply install standard node packages and use their
 build-in api.
 
 ```javascript
-*html () {
+* html() {
   // Process one file and output it
   var slm = require('slm');
 
-  yield 'dist/index.html'.contents = slm.render(yield 'app/index.slm'.contents);
-  browserSync.reload(paths.html.dest);
-}
+  return 'dist/index.html'.write(slm.render(yield 'app/index.slm'.contents));
+},
 
-*scripts () {
+* scripts() {
   // Output stream to file
   var browserify = require('browserify');
 
-  yield 'dist/scripts/app.js'.contents = browserify('app/scripts/app.js', { transform: 'babelify' }).bundle();
-  browserSync.reload(paths.scripts.dest);
-}
+  return 'dist/scripts/app.js'.write(browserify('app/scripts/app.js', { transform: 'babelify' }).bundle());
+},
 
-*styles () {
+* styles() {
   // Output multiple files to directory with the String.prototype.use method
   var stylus = require('stylus');
 
-  yield 'dist/styles/'.contents = yield 'app/styles/*.styl'.use(stylus.render, '.css');
-  browserSync.reload(paths.styles.dest);
+  return 'dist/styles/'.write(yield 'app/styles/*.styl'.use(stylus.render, '.css'));
 }
 ```
 
@@ -127,7 +138,7 @@ build-in api.
 Watch files for changes with String.prototype.onChange, passing in a function or a task name or array of task names.
 
 ```javascript
-*watch () {
+* watch() {
   'app/**/*.slm'.onChange('html');
   'app/scripts/**/*.js'.onChange('scripts');
   'app/styles/**/*.styl'.onChange('styles');
