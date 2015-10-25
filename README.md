@@ -107,6 +107,8 @@ Genome also adds a `.contents` property as a read/write shorthand, so the same c
 Not that `read()`, `write()` and the `.contents` *getter* all return promises, but the `.contents` *setter*
 does not return anything. So if you need the file to be written *before* something else happens, use `write()`.
 
+`.write()` accepts strings, promises, streams and arrays of file objects.
+
 ### Processing files
 Genome does not require plugins like gulp or grunt. Simply install standard node packages and use their
 build-in api.
@@ -145,3 +147,7 @@ Watch files for changes with String.prototype.onChange, passing in a function or
   'dist/**/*'.onChange(browserSync.reload);
 }
 ```
+
+## Project Goals
+- Never require speciallized plugins like Gulp and Grunt
+- Keep code as simple and natural as possible

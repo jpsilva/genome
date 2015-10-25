@@ -1,10 +1,12 @@
 'use strict';
+'use nodent-es7';
 
 var cp = require('fs-cp'),
-    fs = require('fs'),
+    fs = require('mz/fs'),
     gaze = require('gaze'),
     glob = require('glob'),
     mkdirp = require('mkdirp'),
+    parseGlob = require('parse-glob'),
     path = require('path');
 
 class Genome {
@@ -17,10 +19,16 @@ class Genome {
 
   /**
    * Spawns tasks passed in through command line
+   * @param {string | array} defaultTask Optional. If present and no tasks were called form the command line, run this task.
    * @return {Promise}
    */
-  run () {
-    return this.spawn(process.argv.slice(2));
+  run (defaultTask) {
+    var commands = process.argv.slice(2);
+    if (commands.length) {
+      return this.spawn(commands);
+    } else if (defaultTask) {
+      return this.spawn(defaultTask);
+    }
   }
 
   /**
@@ -41,7 +49,7 @@ class Genome {
       if (this._tasks[task]) {
         console.log(`Doing ${task}...`);
 
-        promises.push(runGenerator(this._tasks[task]));
+        promises.push(runGenerator(this._tasks[task].bind(this._tasks)));
       } else {
         console.warn(`'${task}' is not a valid task`);
       }
@@ -93,6 +101,7 @@ function runGenerator(generatorFunc) {
     try {
       result = generator[verb](arg);
     } catch (err) {
+      console.error('err ' , err);
       return Promise.reject(err);
     }
     if (result.done) {
@@ -116,10 +125,10 @@ function prototypeString(genome) {
    * @param  {fn, string, [string]} task   Function or task to call when files change
    */
   String.prototype.onChange = function(task) {
-    var filename = this;
-    console.log(`Watching ${filename}...`);
+    var filepath = this;
+    console.log(`Watching ${filepath}...`);
 
-    gaze(filename, function(err, watcher) {
+    gaze(filepath, function(err, watcher) {
       if (err) {
         return console.error(err);
       }
@@ -136,83 +145,69 @@ function prototypeString(genome) {
     });
   };
 
-  /**
-   * Process glob string, passing file contents into filter
-   * @param  {fn} filter    File contents get passed into this
-   * @param  {string} ext   Optional, change the extension of the file for output
-   * @return {Promise}
-   */
-  String.prototype.use = function(filter, ext) {
-    var globPath = this;
+  // /**
+  //  * Process glob string, passing file contents into filter
+  //  * @param  {fn} filter    File contents get passed into this
+  //  * @param  {string} ext   Optional, change the extension of the file for output
+  //  * @return {Promise}
+  //  */
+  // String.prototype.use = function(filter, ext) {
+  //   var globPath = this;
 
-    return new Promise(function(resolve) {
-      var filenames = glob.sync(globPath),
-          files = [];
+  //   return new Promise(function(resolve) {
+  //     var filepaths = glob.sync(globPath),
+  //         files = [];
 
-      var promises = filenames.map(function(filename) {
-        return filename.contents.then(function(contents) {
-          var parsedPath = path.parse(filename);
+  //     var promises = filepaths.map(function(filepath) {
+  //       return filepath.contents.then(function(contents) {
+  //         var parsedPath = path.parse(filepath);
 
-          if (ext) {
-            parsedPath.ext = ext;
-          }
+  //         if (ext) {
+  //           parsedPath.ext = ext;
+  //         }
 
-          files.push({
-            filename: filename,
-            path: parsedPath,
-            data: filter(contents)
-          });
-        });
-      });
+  //         files.push({
+  //           filepath: filepath,
+  //           path: parsedPath,
+  //           data: filter(contents)
+  //         });
+  //       });
+  //     });
 
-      Promise
-        .all(promises)
-        .then(function() {
-          resolve(files);
-        });
-    });
-  };
+  //     Promise
+  //       .all(promises)
+  //       .then(function() {
+  //         resolve(files);
+  //       });
+  //   });
+  // };
 
   String.prototype.read = function() {
-    var filename = this;
-
-    return new Promise(function(resolve, reject) {
-      fs.readFile(filename, 'utf8', function(err, data) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(data);
-        }
-      });
-    });
+    return fs.readFile(this, 'utf8');
   };
 
   String.prototype.write = function(data) {
     var dest = this;
 
-    if (data.readable) {
+    if (typeof data.then === 'function') {
+      // If promise, write after resolve
+      data.then(function(resolvedData) {
+        dest.write(resolvedData);
+      });
+    } else if (data.readable) {
       // If stream
       return cp(data, dest);
     } else if (data.splice) {
       // If array of files
       let promises = data.map(function(file) {
-        return path.normalize(`${dest}/${file.path.name}${file.path.ext}`).write(file.data);
+        return path.normalize(`${dest}/${file.path.dir}/${file.path.name}${file.path.ext}`).write(file.data);
       });
 
       return Promise.all(promises);
     } else {
       // If string
-      return new Promise(function(resolve, reject) {
-        mkdirp.sync(path.dirname(dest));
-        fs.writeFile(dest, data, 'utf8', function(err) {
-          if (err) {
-            reject(err);
-            console.log('err ' , err);
-          } else {
-            resolve(data);
-          }
-        });
-      });
+      mkdirp.sync(path.dirname(dest));
+      return fs.writeFile(dest, data, 'utf8');
     }
   };
 
@@ -222,6 +217,60 @@ function prototypeString(genome) {
     },
     set: function(data) {
       this.write(data);
+    }
+  });
+
+  Object.defineProperty(String.prototype, 'filepaths', {
+    get: function () {
+      var pattern = this,
+          parsedGlob = parseGlob(pattern),
+          files;
+
+      return new Promise(function(resolve, reject) {
+        glob(pattern, function(err, filepaths) {
+          if (err) {
+            console.error('err ' , err);
+            reject(err);
+          } else {
+            files = filepaths.map(function(filepath) {
+              return {
+                full: filepath,
+                relative: path.relative(parsedGlob.base, filepath)
+              };
+            });
+
+            resolve(files);
+          }
+        })
+      });
+    }
+  });
+
+  Object.defineProperty(String.prototype, 'file', {
+    get: function () {
+      return {
+        filepath: this,
+        path: path.parse(this),
+        data: this.read()
+      };
+    }
+  });
+
+  Object.defineProperty(String.prototype, 'files', {
+    get: function* () {
+      var paths = yield this.filepaths;
+
+      var files = yield Promise.all(paths.map(function(filepath) {
+        return filepath.full.read().then(function(contents) {
+          return {
+            filepath: filepath.full,
+            path: path.parse(filepath.relative),
+            data: contents
+          };
+        });
+      }));
+
+      return files;
     }
   });
 }

@@ -1,10 +1,10 @@
 {
   "name": "genome",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Simple build system using ES6 generators and promises",
   "main": "./index.js",
   "bin": {
-    "genome": "./bin/genome.js"
+    "nom": "./bin/genome.js"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -12,13 +12,16 @@
   "author": "Justin Paul Silva",
   "license": "ISC",
   "repository": {
-    "type" : "git",
-    "url" : "https://github.com/jpsilva/genome.git"
+    "type": "git",
+    "url": "https://github.com/jpsilva/genome.git"
   },
   "dependencies": {
+    "babel": "^5.6.14",
     "fs-cp": "^1.3.1",
     "gaze": "^0.5.1",
     "glob": "^5.0.13",
-    "mkdirp": "^0.5.1"
+    "mkdirp": "^0.5.1",
+    "mz": "^2.0.0",
+    "parse-glob": "^3.0.2"
   }
 }

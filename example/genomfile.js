@@ -1,7 +1,9 @@
 'use strict';
+'use nodent-es7';
 
 var browserify = require('browserify'),
     browserSync = require('browser-sync').create(),
+    co = require('co'),
     del = require('del'),
     genome = require('genome'),
     slm = require('slm'),
@@ -89,7 +91,6 @@ genome.tasks = {
   * medium() {
     yield genome.wait(1000);
     yield genome.wait(1000);
-    yield genome.wait(1000);
     console.log('2nd');
   },
 
@@ -98,9 +99,10 @@ genome.tasks = {
   },
 
   * async() {
-    yield genome.spawn(['long']);
-    yield genome.spawn(['medium']);
-    genome.spawn('short');
+    // yield *this.long();
+    // yield *this.medium();
+    // yield *this.short();
+    yield *[this.long(), this.medium(), this.short()];
   }
 };
 
