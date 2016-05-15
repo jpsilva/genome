@@ -1,0 +1,3 @@
+'Main file';
+
+require('./include');

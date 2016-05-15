@@ -1,107 +1,59 @@
 'use strict';
 
-var browserify = require('browserify'),
-    browserSync = require('browser-sync').create(),
-    del = require('del'),
-    genome = require('genome'),
-    slm = require('slm'),
-    stylus = require('stylus'),
-    paths = {
-      server: {
-        root: 'dist'
-      },
-      html: {
-        src: 'app/index.slm',
-        dest: 'dist/index.html'
-      },
-      robots: {
-        src: 'app/robots.txt',
-        dest: 'dist/robots.txt'
-      },
-      scripts: {
-        src: 'app/scripts/app.js',
-        dest: 'dist/scripts/app.js'
-      },
-      styles: {
-        src: 'app/styles/screen.styl',
-        include: 'app/styles/',
-        dest: 'dist/styles/screen.css'
-      }
-    };
+import { file, all } from '../index';
+import browserify from 'browserify';
+import chalk from 'chalk';
+import del from 'del';
+import stylus from 'stylus';
 
-genome.tasks = {
-  * clean() {
-    // Use plain JS
-    del.sync(paths.server.root);
-  },
+export async function css() {
+  var raw = await file('src/screen.styl').read();
+  var css = stylus(raw).render();
+  await file('dist/screen.css').write(css);
+  console.log(chalk.green('Done compiling css.'));
+}
 
-  * robots() {
-    // Copy one file to another
-    return paths.robots.dest.write(yield paths.robots.src.contents);
-  },
+export async function html(srcFile) {
+  var raw = await srcFile.read();
+  await file('dist/' + srcFile.relativePath).write(raw);
+  console.log(chalk.green(`Done copying ${srcFile.path}.`));
+}
 
-  * html() {
-    // Process one file and output it
-    return paths.html.dest.write(slm.render(yield paths.html.src.contents));
-  },
+export async function js() {
+  var js = browserify('src/main.js').bundle();
+  await file('dist/main.js').write(js);
+  console.log(chalk.green('Done compiling js.'));
+}
 
-  * scripts() {
-    // Output stream to file
-    return paths.scripts.dest.write(browserify(paths.scripts.src, { transform: 'babelify' }).bundle());
-  },
+export async function destroy(srcFile) {
+  await del('dist/' + srcFile.relativePath);
+  console.log(chalk.green(`Done deleting ${srcFile.path}.`));
+}
 
-  * styles() {
-    // Output multiple files to directory
-    // return paths.styles.dest.write(yield paths.styles.src.use(stylus.render, '.css'));
+export async function build() {
+  await all(css(), js(), html.for('src/**/*.html'));
+  console.log(chalk.green('Done building.'));
+}
 
-    var css = stylus(yield paths.styles.src.read()).include(paths.styles.include).render();
-    return paths.styles.dest.write(css);
-  },
+export default async function watch() {
+  // Clean build directory
+  await destroy.for('dist/');
 
-  * watch() {
-    yield genome.build();
-    genome.serve();
+  // Build files
+  await build();
 
-    // Watch files for changes with .onChange
-    'app/**/*.slm'.onChange('html');
-    'app/scripts/**/*.js'.onChange('scripts');
-    'app/styles/**/*.styl'.onChange('styles');
-    'dist/**/*'.onChange(browserSync.reload);
-  },
+  // Watch files
+  css.when('src/**/*.styl').changed().added();
+  html.when('src/**/*.html').changed().added();
+  js.when('src/**/*.js').changed().added();
+  destroy.when('src/**/*').deleted();
+  console.log(chalk.green(`Watching ...`));
+}
 
-  * build() {
-    // Run tasks in serial with yield statement
-    yield genome.clean();
-    yield [genome.html(), genome.robots(), genome.scripts(), genome.styles()];
-    // return genome.spawn(['html', 'robots', 'scripts', 'styles']);
-  },
-
-  * serve() {
-    browserSync.init({server: paths.server.root});
-  },
-
-  // For testing synchronicity
-  * short() {
-    yield genome.wait(1000);
-    console.log('3rd');
-  },
-
-  * medium() {
-    yield genome.wait(1000);
-    yield genome.wait(1000);
-    yield genome.wait(1000);
-    console.log('2nd');
-  },
-
-  * long() {
-    console.log(yield genome.wait(2500, '1st'));
-  },
-
-  * async() {
-    yield genome.spawn(['long']);
-    yield genome.spawn(['medium']);
-    genome.spawn('short');
-  }
-};
-
-genome.run();
+function wait (time, params) {
+  return new Promise(function(resolve) {
+    setTimeout(function() {
+      resolve(params);
+    }, time);
+  });
+}
